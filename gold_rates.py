@@ -1,18 +1,15 @@
 import json
-import logging
 from bs4 import BeautifulSoup
 import cloudscraper
 import mysql.connector
-import brotli
 from mysql.connector import Error
+import brotli
+import pytz
+from datetime import datetime
 
-    # Database connection configuration
-config = {
-    'user': 'hellodev_good_returns',
-    'password': 'good420@',
-    'host': '103.211.218.103',
-    'database': 'hellodev_fuel_price',
-    }
+# Configure Indian Timezone
+IST = pytz.timezone('Asia/Kolkata')
+
 def gold_good_returns():
     def get_data(city_html):
         soup = BeautifulSoup(city_html, 'html.parser')
@@ -66,14 +63,14 @@ def gold_good_returns():
             res = scraper.get(url, headers=headers)
             if res.status_code == 200:
                 if res.headers.get('Content-Encoding') == 'br':
-                  # Decompress using Brotli
-                  try:
-                    decompressed_data = brotli.decompress(res.content)
-                    json_data = decompressed_data.decode('utf-8')
-                  except:
-                    json_data = res.text
+                    # Decompress using Brotli
+                    try:
+                        decompressed_data = brotli.decompress(res.content)
+                        json_data = decompressed_data.decode('utf-8')
+                    except Exception as e:
+                        json_data = res.text
                 else:
-                  json_data = res.text
+                    json_data = res.text
 
                 try:
                     a = json.loads(json_data)
@@ -81,22 +78,23 @@ def gold_good_returns():
                     if city_html:
                         data = get_data(city_html)
                         all_data.extend(data)
-                    else:
-                        logging.warning('No `city_html` key found in response')
                 except Exception as e:
-                    logging.error(f'Error parsing JSON data: {e}')
+                    pass  # Handle JSON parsing error
             else:
-                logging.error(f'Some other error occurred with status code {res.status_code}')
+                pass  # Handle unexpected status code
         except cloudscraper.exceptions.RequestException as e:
-            logging.error(f'Request failed: {e}')
+            pass  # Handle request failure
 
     # Convert list of dictionaries to JSON
     if all_data:
         json_data = json.dumps(all_data, indent=4)
         return json_data
     else:
-        logging.info('No data was collected')
         return json.dumps([])
+
+def sanitize_string(s):
+    """Sanitize string to ensure it can be inserted into the database."""
+    return s.encode('utf-8', 'replace').decode('utf-8')
 
 def insert_data_to_db(data):
     try:
@@ -107,27 +105,34 @@ def insert_data_to_db(data):
         cursor.execute("DROP TABLE IF EXISTS gold_rates")
         
         create_table_query = """CREATE TABLE gold_rates (
-                                    City VARCHAR(255),
-                                    `22K Today` VARCHAR(255),
-                                    `24K Today` VARCHAR(255),
-                                    `18K Today` VARCHAR(255),
+                                    City VARCHAR(255) CHARACTER SET utf8mb4,
+                                    `22K Today` VARCHAR(255) CHARACTER SET utf8mb4,
+                                    `24K Today` VARCHAR(255) CHARACTER SET utf8mb4,
+                                    `18K Today` VARCHAR(255) CHARACTER SET utf8mb4,
                                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                                 )"""
         cursor.execute(create_table_query)
-        logging.info("Table created successfully.")
+        
+        # Get the current time in IST once
+        current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
         
         # Insert new data
-        insert_query = """INSERT INTO gold_rates (City, `22K Today`, `24K Today`, `18K Today`)
-                          VALUES (%s, %s, %s, %s)"""
+        insert_query = """INSERT INTO gold_rates (City, `22K Today`, `24K Today`, `18K Today`, timestamp)
+                          VALUES (%s, %s, %s, %s, %s)"""
         
         for item in data:
-            cursor.execute(insert_query, (item['City'], item['22K Today'], item['24K Today'], item['18K Today']))
+            cursor.execute(insert_query, (
+                sanitize_string(item['City']),
+                sanitize_string(item['22K Today']),
+                sanitize_string(item['24K Today']),
+                sanitize_string(item['18K Today']),
+                current_time  # Use the same timestamp for all entries
+            ))
         
         connection.commit()
-        logging.info(f"{cursor.rowcount} records inserted successfully.")
 
     except Error as err:
-        logging.error(f"Database error: {err}")
+        pass  # Handle database error
     finally:
         if connection.is_connected():
             cursor.close()
@@ -139,5 +144,3 @@ if __name__ == "__main__":
     if result:
         data = json.loads(result)
         insert_data_to_db(data)
-    else:
-        logging.info("No data returned to insert into the database.")
