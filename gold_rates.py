@@ -1,9 +1,24 @@
 import json
+import logging
 from bs4 import BeautifulSoup
 import cloudscraper
 import mysql.connector
 from mysql.connector import Error
-from datetime import datetime
+
+# Configure logging
+logging.basicConfig(
+    filename='gold_rates_log.txt',  # Log file name
+    level=logging.INFO,  # Log level
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Database connection configuration
+config = {
+    'user': 'hellodev_good_returns',
+    'password': 'good420@',
+    'host': '103.211.218.103',  # Replace with your MySQL server’s IP or domain
+    'database': 'hellodev_fuel_price',
+}
 
 def gold_good_returns():
     def get_data(city_html):
@@ -30,10 +45,7 @@ def gold_good_returns():
             })
 
         return data
-
-    def sanitize_string(s):
-        return s.encode('utf-8', 'replace').decode('utf-8')
-
+    
     headers = {
         'Host': 'www.goodreturns.in',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0',
@@ -67,79 +79,62 @@ def gold_good_returns():
                         data = get_data(city_html)
                         all_data.extend(data)
                     else:
-                        print('No `city_html` key found in response')
+                        logging.warning('No `city_html` key found in response')
                 except Exception as e:
-                    print(f'Error parsing JSON data: {e}')
+                    logging.error(f'Error parsing JSON data: {e}')
             else:
-                print(f'Some other error occurred with status code {res.status_code}')
+                logging.error(f'Some other error occurred with status code {res.status_code}')
         except cloudscraper.exceptions.RequestException as e:
-            print(f'Request failed: {e}')
+            logging.error(f'Request failed: {e}')
 
-    # Database connection configuration
-    config = {
-        'user': 'hellodev_good_returns',
-        'password': 'good420@',
-        'host': '103.211.218.103',
-        'database': 'hellodev_fuel_price',
-    }
-
-    # Insert data into MySQL
+    # Convert list of dictionaries to JSON
     if all_data:
-        try:
-            connection = mysql.connector.connect(**config)
-            if connection.is_connected():
-                cursor = connection.cursor()
-
-                # Drop the existing table if it exists
-                cursor.execute("DROP TABLE IF EXISTS gold_rates")
-
-                # Create a new table with utf8mb4 character set
-                create_table_query = '''
-                CREATE TABLE gold_rates (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    City VARCHAR(255) CHARACTER SET utf8mb4,
-                    `22K Today` VARCHAR(50) CHARACTER SET utf8mb4,
-                    `24K Today` VARCHAR(50) CHARACTER SET utf8mb4,
-                    `18K Today` VARCHAR(50) CHARACTER SET utf8mb4,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) CHARACTER SET utf8mb4;
-                '''
-                cursor.execute(create_table_query)
-
-                # Prepare the insert statement
-                insert_query = '''
-                INSERT INTO gold_rates (City, `22K Today`, `24K Today`, `18K Today`, timestamp)
-                VALUES (%s, %s, %s, %s, %s)
-                '''
-
-                # Get the current timestamp
-                current_timestamp = datetime.now()
-
-                # Insert each row of data, sanitizing inputs
-                for item in all_data:
-                    cursor.execute(insert_query, (
-                        sanitize_string(item['City']),
-                        sanitize_string(item['22K Today']),
-                        sanitize_string(item['24K Today']),
-                        sanitize_string(item['18K Today']),
-                        current_timestamp
-                    ))
-
-                # Commit the transaction
-                connection.commit()
-                print(f"{cursor.rowcount} records inserted successfully.")
-
-        except Error as e:
-            print(f"Error: {e}")
-
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-                print("MySQL connection is closed.")
-
+        json_data = json.dumps(all_data, indent=4)
+        return json_data
     else:
-        print('No data was collected')
+        logging.info('No data was collected')
         return json.dumps([])
 
-result = gold_good_returns()
+def insert_data_to_db(data):
+    try:
+        connection = mysql.connector.connect(**config)
+        cursor = connection.cursor()
+        
+        # Check if table exists and drop it
+        cursor.execute("DROP TABLE IF EXISTS gold_rates")
+        
+        create_table_query = """CREATE TABLE gold_rates (
+                                    City VARCHAR(255),
+                                    `22K Today` VARCHAR(255),
+                                    `24K Today` VARCHAR(255),
+                                    `18K Today` VARCHAR(255),
+                                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                                )"""
+        cursor.execute(create_table_query)
+        logging.info("Table created successfully.")
+        
+        # Insert new data
+        insert_query = """INSERT INTO gold_rates (City, `22K Today`, `24K Today`, `18K Today`)
+                          VALUES (%s, %s, %s, %s)"""
+        
+        for item in data:
+            cursor.execute(insert_query, (item['City'], item['22K Today'], item['24K Today'], item['18K Today']))
+        
+        connection.commit()
+        logging.info(f"{cursor.rowcount} records inserted successfully.")
+
+    except Error as err:
+        logging.error(f"Database error: {err}")
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+
+# Main execution
+if __name__ == "__main__":
+    result = gold_good_returns()
+    if result:
+        data = json.loads(result)
+        insert_data_to_db(data)
+    else:
+        logging.info("No data returned to insert into the database.")
