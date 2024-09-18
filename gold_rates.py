@@ -6,6 +6,13 @@ import mysql.connector
 import brotli
 from mysql.connector import Error
 
+    # Database connection configuration
+config = {
+    'user': 'hellodev_good_returns',
+    'password': 'good420@',
+    'host': '103.211.218.103',
+    'database': 'hellodev_fuel_price',
+    }
 def gold_good_returns():
     def get_data(city_html):
         soup = BeautifulSoup(city_html, 'html.parser')
