@@ -6,7 +6,13 @@ from mysql.connector import Error
 import brotli
 import pytz
 from datetime import datetime
-
+# Database connection configuration
+config = {
+        'user': 'hellodev_good_returns',
+        'password': 'good420@',
+        'host': '103.211.218.103',
+        'database': 'hellodev_fuel_price',
+    }
 # Configure Indian Timezone
 IST = pytz.timezone('Asia/Kolkata')
 
