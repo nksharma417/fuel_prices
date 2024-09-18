@@ -5,21 +5,6 @@ import cloudscraper
 import mysql.connector
 from mysql.connector import Error
 
-# Configure logging
-logging.basicConfig(
-    filename='gold_rates_log.txt',  # Log file name
-    level=logging.INFO,  # Log level
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-# Database connection configuration
-config = {
-    'user': 'hellodev_good_returns',
-    'password': 'good420@',
-    'host': '103.211.218.103',  # Replace with your MySQL server’s IP or domain
-    'database': 'hellodev_fuel_price',
-}
-
 def gold_good_returns():
     def get_data(city_html):
         soup = BeautifulSoup(city_html, 'html.parser')
@@ -72,8 +57,18 @@ def gold_good_returns():
         try:
             res = scraper.get(url, headers=headers)
             if res.status_code == 200:
+                if res.headers.get('Content-Encoding') == 'br':
+                  # Decompress using Brotli
+                  try:
+                    decompressed_data = brotli.decompress(res.content)
+                    json_data = decompressed_data.decode('utf-8')
+                  except:
+                    json_data = res.text
+                else:
+                  json_data = res.text
+
                 try:
-                    a = res.json()
+                    a = json.loads(json_data)
                     city_html = a.get('city_html', '')  # Ensure `city_html` key exists
                     if city_html:
                         data = get_data(city_html)
