@@ -3,6 +3,7 @@ import logging
 from bs4 import BeautifulSoup
 import cloudscraper
 import mysql.connector
+import brotli
 from mysql.connector import Error
 
 def gold_good_returns():
