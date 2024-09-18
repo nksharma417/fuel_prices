@@ -2,3 +2,4 @@ beautifulsoup4
 cloudscraper
 mysql-connector-python
 brotli
+pytz
