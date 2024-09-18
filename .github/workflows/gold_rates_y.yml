@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-script:
-    runs-on: windows-latest  # Use Windows environment
+    runs-on: ubuntu-latest  # Use Ubuntu environment
 
     steps:
     - name: Checkout repository
@@ -25,4 +25,3 @@ jobs:
 
     - name: Run the script
       run: python gold_rates.py  # Ensure the script name matches
-
